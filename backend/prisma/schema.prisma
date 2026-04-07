@@ -1,0 +1,338 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USUÁRIOS E AUTENTICAÇÃO
+// ============================================
+
+model User {
+  id           String    @id @default(uuid())
+  name         String
+  email        String    @unique
+  cpf          String    @unique
+  password     String?
+  role         UserRole  @default(OFFICER)
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+  isActive     Boolean   @default(true)
+  govBrId      String?   @unique
+  govBrToken   String?
+  phone        String?
+  avatar       String?
+  lastLogin    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  createdProcesses  Process[]     @relation("ProcessCreator")
+  assignedProcesses Process[]     @relation("ProcessAssignee")
+  signatures        Signature[]
+  activities        Activity[]
+  notifications     Notification[]
+  tokens            RefreshToken[]
+  movements         Movement[]
+
+  @@map("users")
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ADMIN
+  MANAGER
+  OFFICER
+  CITIZEN
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("refresh_tokens")
+}
+
+// ============================================
+// ESTRUTURA ORGANIZACIONAL
+// ============================================
+
+model Department {
+  id          String       @id @default(uuid())
+  name        String
+  code        String       @unique
+  description String?
+  parentId    String?
+  parent      Department?  @relation("DeptHierarchy", fields: [parentId], references: [id])
+  children    Department[] @relation("DeptHierarchy")
+  users       User[]
+  processes   Process[]
+  movements   Movement[]
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@map("departments")
+}
+
+// ============================================
+// TIPOS DE PROCESSO
+// ============================================
+
+model ProcessType {
+  id               String    @id @default(uuid())
+  name             String
+  code             String    @unique
+  description      String?
+  requiresSignature Boolean  @default(false)
+  slaDays          Int?
+  isPublic         Boolean   @default(false)
+  processes        Process[]
+  isActive         Boolean   @default(true)
+  createdAt        DateTime  @default(now())
+
+  @@map("process_types")
+}
+
+// ============================================
+// PROCESSOS / PROTOCOLOS
+// ============================================
+
+model Process {
+  id            String        @id @default(uuid())
+  number        String        @unique
+  year          Int
+  sequence      Int
+  title         String
+  description   String?
+  status        ProcessStatus @default(OPEN)
+  priority      Priority      @default(NORMAL)
+  typeId        String
+  type          ProcessType   @relation(fields: [typeId], references: [id])
+  departmentId  String
+  department    Department    @relation(fields: [departmentId], references: [id])
+  creatorId     String
+  creator       User          @relation("ProcessCreator", fields: [creatorId], references: [id])
+  assigneeId    String?
+  assignee      User?         @relation("ProcessAssignee", fields: [assigneeId], references: [id])
+  dueDate       DateTime?
+  closedAt      DateTime?
+  isConfidential Boolean      @default(false)
+
+  // Dados do solicitante externo (cidadão)
+  externalName  String?
+  externalCpf   String?
+  externalEmail String?
+  externalPhone String?
+
+  documents     Document[]
+  movements     Movement[]
+  activities    Activity[]
+  tags          ProcessTag[]
+
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@map("processes")
+}
+
+enum ProcessStatus {
+  OPEN
+  IN_PROGRESS
+  PENDING
+  WAITING_SIGNATURE
+  COMPLETED
+  ARCHIVED
+  CANCELLED
+}
+
+enum Priority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+model ProcessTag {
+  id        String  @id @default(uuid())
+  processId String
+  process   Process @relation(fields: [processId], references: [id], onDelete: Cascade)
+  tag       String
+
+  @@unique([processId, tag])
+  @@map("process_tags")
+}
+
+// ============================================
+// TRAMITAÇÃO / MOVIMENTAÇÃO
+// ============================================
+
+model Movement {
+  id           String       @id @default(uuid())
+  processId    String
+  process      Process      @relation(fields: [processId], references: [id])
+  fromDeptId   String?
+  fromDept     Department?  @relation(fields: [fromDeptId], references: [id])
+  toDeptId     String?
+  fromUserId   String?
+  toUserId     String?
+  userId       String
+  user         User         @relation(fields: [userId], references: [id])
+  observation  String?
+  type         MovementType
+  createdAt    DateTime     @default(now())
+
+  @@map("movements")
+}
+
+enum MovementType {
+  CREATED
+  FORWARDED
+  RETURNED
+  SIGNED
+  COMPLETED
+  ARCHIVED
+  COMMENTED
+  REOPENED
+  CANCELLED
+}
+
+// ============================================
+// DOCUMENTOS
+// ============================================
+
+model Document {
+  id           String      @id @default(uuid())
+  processId    String
+  process      Process     @relation(fields: [processId], references: [id])
+  name         String
+  originalName String
+  mimeType     String
+  size         Int
+  path         String
+  hash         String?
+  isSigned     Boolean     @default(false)
+  isMain       Boolean     @default(false)
+  uploadedById String
+  signatures   Signature[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@map("documents")
+}
+
+// ============================================
+// ASSINATURAS DIGITAIS
+// ============================================
+
+model Signature {
+  id              String          @id @default(uuid())
+  documentId      String
+  document        Document        @relation(fields: [documentId], references: [id])
+  userId          String
+  user            User            @relation(fields: [userId], references: [id])
+  type            SignatureType
+  status          SignatureStatus @default(PENDING)
+  hash            String?
+  certificate     String?
+  signatureData   String?
+  govBrProtocol   String?
+  requestedAt     DateTime        @default(now())
+  signedAt        DateTime?
+  expiresAt       DateTime?
+  rejectedReason  String?
+
+  @@map("signatures")
+}
+
+enum SignatureType {
+  DIGITAL_CERT
+  GOV_BR
+  ELECTRONIC
+}
+
+enum SignatureStatus {
+  PENDING
+  SIGNED
+  REJECTED
+  EXPIRED
+}
+
+// ============================================
+// AUDITORIA / ATIVIDADES
+// ============================================
+
+model Activity {
+  id        String   @id @default(uuid())
+  processId String?
+  process   Process? @relation(fields: [processId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  action    String
+  entity    String?
+  entityId  String?
+  details   Json?
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@map("activities")
+}
+
+// ============================================
+// NOTIFICAÇÕES
+// ============================================
+
+model Notification {
+  id        String       @id @default(uuid())
+  userId    String
+  user      User         @relation(fields: [userId], references: [id])
+  title     String
+  message   String
+  type      NotifType    @default(INFO)
+  isRead    Boolean      @default(false)
+  processId String?
+  link      String?
+  createdAt DateTime     @default(now())
+
+  @@map("notifications")
+}
+
+enum NotifType {
+  INFO
+  WARNING
+  SUCCESS
+  ERROR
+}
+
+// ============================================
+// CONFIGURAÇÕES DO SISTEMA
+// ============================================
+
+model Setting {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  value       String
+  description String?
+  updatedAt   DateTime @updatedAt
+
+  @@map("settings")
+}
+
+// ============================================
+// CONTADOR DE PROTOCOLO (por ano)
+// ============================================
+
+model ProtocolCounter {
+  id       String @id @default(uuid())
+  year     Int    @unique
+  sequence Int    @default(0)
+
+  @@map("protocol_counters")
+}
