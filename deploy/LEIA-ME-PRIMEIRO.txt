@@ -1,0 +1,51 @@
+╔══════════════════════════════════════════════════════════════════╗
+║           AgilDoc - Pacote de Deploy para UOL MeuPainelHost     ║
+╚══════════════════════════════════════════════════════════════════╝
+
+CONTEÚDO DESTE PACOTE:
+┌─ deploy/
+│  ├── public_html/    → Upload para /public_html/ do seu domínio no cPanel
+│  └── api/            → Upload para /agildoc-api/ (FORA do public_html)
+
+══════════════════════════════════════════════
+PASSO A PASSO RESUMIDO:
+══════════════════════════════════════════════
+
+1. BANCO DE DADOS (no cPanel UOL):
+   - cPanel → MySQL Databases → Create Database: "agildoc"
+   - Create User: "agildoc_user" com senha forte
+   - Add User to Database: ALL PRIVILEGES
+   ⚠️  O nome real fica: "cpanelusuario_agildoc"
+
+2. FRONTEND:
+   - Envie TUDO de public_html/ para /public_html/ no cPanel
+   - (via File Manager ou FTP)
+
+3. BACKEND:
+   - Crie pasta /home/cpanelusuario/agildoc-api/ no cPanel
+   - Envie TUDO de api/ para essa pasta
+   - Renomeie .env.example para .env
+   - Edite o .env com os dados do seu banco e domínio
+
+4. NODE.JS:
+   - cPanel → Node.js Selector → Create Application
+   - Application root: agildoc-api
+   - Startup file:     app.js
+   - Node.js version:  20.x
+   - Clique "Run NPM Install"
+
+5. BANCO - CRIAR TABELAS:
+   - No Terminal SSH:
+     cd ~/agildoc-api
+     npx prisma db push
+     npx ts-node prisma/seed.ts
+
+6. TESTAR:
+   - Acesse: https://seudominio.com.br/api/health
+   - Acesse: https://seudominio.com.br
+   - Login:   admin@agildoc.com.br / Admin@123
+
+══════════════════════════════════════════════
+GUIA COMPLETO COM DETALHES:
+docs/DEPLOY_UOL_CPANEL.md
+══════════════════════════════════════════════
