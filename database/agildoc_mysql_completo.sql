@@ -201,7 +201,7 @@ CREATE TABLE IF NOT EXISTS `activities` (
   `action` varchar(100) NOT NULL,
   `entity` varchar(100) DEFAULT NULL,
   `entityId` varchar(36) DEFAULT NULL,
-  `details` json DEFAULT NULL,
+  `details` longtext DEFAULT NULL,
   `ip` varchar(45) DEFAULT NULL,
   `userAgent` varchar(500) DEFAULT NULL,
   `createdAt` datetime(3) NOT NULL DEFAULT current_timestamp(3),
